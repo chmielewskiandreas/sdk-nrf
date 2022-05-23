@@ -54,7 +54,7 @@ int coap_get_recv_timeout(struct download_client *dl)
 {
 	int timeout;
 
-	__ASSERT(!has_pending(dl), "Must have coap pending");
+	__ASSERT(has_pending(dl), "Must have coap pending");
 
 	/* Retransmission is cycled in case recv() times out. In case sending request
 	 * blocks, the time that is used for sending request must be substracted next time
