@@ -298,7 +298,7 @@ if(CONFIG_BOOTLOADER_MCUBOOT)
     execute_process(COMMAND
       ${PYTHON_EXECUTABLE}
       ${ZEPHYR_MCUBOOT_MODULE_DIR}/scripts/imgtool.py
-      getpub -k ${mcuboot_key_file}
+      getpriv -k ${mcuboot_key_file}
       OUTPUT_QUIET
       ERROR_QUIET
       RESULT_VARIABLE ret_val
