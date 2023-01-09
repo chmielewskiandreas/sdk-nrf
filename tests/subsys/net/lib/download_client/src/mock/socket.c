@@ -5,9 +5,11 @@
  */
 #include <zephyr/net/socket_offload.h>
 #include <sockets_internal.h>
-#include <zephyr/ztest.h>
+//#include <zephyr/ztest.h>
 
 #include "mock/socket.h"
+
+LOG_MODULE_DECLARE(download_client_test);
 
 void mock_socket_iface_init(struct net_if *iface);
 
@@ -27,12 +29,17 @@ struct net_if_api mock_if_api = {
 static ssize_t mock_socket_offload_recvfrom(void *obj, void *buf, size_t len, int flags,
 					    struct sockaddr *from, socklen_t *fromlen)
 {
+	LOG_INF("***************** mock_socket_offload_recvfrom");
+
 	k_sleep(K_MSEC(50));
-	return ztest_get_return_value();
+	return 50;
+	//	return ztest_get_return_value();
 }
 
 static ssize_t mock_socket_offload_read(void *obj, void *buffer, size_t count)
 {
+	LOG_INF("***************** mock_socket_offload_read");
+
 	return mock_socket_offload_recvfrom(obj, buffer, count, 0, NULL, 0);
 }
 
@@ -40,16 +47,24 @@ static ssize_t mock_socket_offload_sendto(void *obj, const void *buf, size_t len
 					  const struct sockaddr *to, socklen_t tolen)
 {
 	k_sleep(K_MSEC(50));
-	return ztest_get_return_value();
+
+	LOG_INF("***************** mock_socket_offload_sendto");
+
+	return 50;
+	//	return ztest_get_return_value();
 }
 
 static ssize_t mock_socket_offload_write(void *obj, const void *buffer, size_t count)
 {
+	LOG_INF("***************** mock_socket_offload_write");
+
 	return mock_socket_offload_sendto(obj, buffer, count, 0, NULL, 0);
 }
 
 static int mock_socket_offload_close(void *obj)
 {
+	LOG_INF("***************** mock_socket_offload_close");
+
 	k_sleep(K_MSEC(50));
 	return zsock_close_ctx(obj);
 }

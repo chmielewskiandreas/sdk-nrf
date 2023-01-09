@@ -221,8 +221,11 @@ static void target_image_type_store(uint16_t instance, int img_type)
 
 static void reboot_work_handler(void)
 {
+  LOG_INF("***************** reboot_work_handler");
+
 #if defined(CONFIG_LWM2M_CLIENT_UTILS_FIRMWARE_UPDATE_REBOOT) &&                                   \
 	defined(CONFIG_LWM2M_CLIENT_UTILS_DEVICE_OBJ_SUPPORT)
+  LOG_INF("***************** reboot_work_handler 2");
 	lwm2m_device_reboot_cb(0, NULL, 0);
 #endif
 }
@@ -465,6 +468,7 @@ static void update_work_handler(struct k_work *work)
 		set_result(modem_obj_id, result);
 #endif
 	}
+  LOG_INF("**************** calling reboot_work_handler");
 	reboot_work_handler();
 }
 
@@ -486,6 +490,7 @@ static int firmware_update_cb(uint16_t obj_inst_id, uint8_t *args, uint16_t args
 		return -EACCES;
 	}
 
+  LOG_INF("*********** scheduling update work");
 	k_work_schedule(&update_data.work, K_SECONDS(5));
 	return 0;
 }
@@ -1000,6 +1005,7 @@ int lwm2m_init_firmware(void)
 		target_image_type[i] = DFU_TARGET_IMAGE_TYPE_NONE;
 	}
 
+  LOG_INF("*************** update work handler is initialized");
 	k_work_init_delayable(&update_data.work, update_work_handler);
 	ongoing_obj_id = UNUSED_OBJ_ID;
 
@@ -1102,6 +1108,7 @@ void lwm2m_verify_modem_fw_update(void)
 		result = STATE_IDLE;
 		write_resource_to_settings(modem_id, 3, &result, sizeof(result));
 	}
+  LOG_INF("*************** calling reboot work handler 2");
 	reboot_work_handler();
 }
 

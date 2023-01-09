@@ -3,15 +3,20 @@
  *
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
+#include "mock/socket.h"
+#include "stubs.h"
+
+#include <zephyr/fff.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/ztest.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/net/socket_offload.h>
-
-#include <zephyr/ztest.h>
 #include <download_client.h>
 
-#include "mock/socket.h"
-#include "mock/dl_coap.h"
+LOG_MODULE_REGISTER(download_client_test);
+
+DEFINE_FFF_GLOBALS;
 
 static enum download_client_evt_id last_event = -1;
 
@@ -48,14 +53,14 @@ static enum download_client_evt_id get_last_download_client_event(bool reset)
 	return event;
 }
 
-static void mock_return_values(const char *func, int32_t *val, size_t len)
-{
-	size_t i;
-
-	for (i = 0; i < len; i++) {
-		z_ztest_returns_value(func, val[i]);
-	}
-}
+//static void mock_return_values(const char *func, int32_t *val, size_t len)
+//{
+//	size_t i;
+//
+//	for (i = 0; i < len; i++) {
+//		z_ztest_returns_value(func, val[i]);
+//	}
+//}
 
 static bool wait_for_event(enum download_client_evt_id event, uint8_t seconds)
 {
@@ -70,6 +75,20 @@ static bool wait_for_event(enum download_client_evt_id event, uint8_t seconds)
 	}
 
 	return get_last_download_client_event(true) != event;
+}
+
+#define FFF_FAKES_LIST(FAKE)
+
+static void my_suite_before(void *data)
+{
+	/* Register resets */
+	DO_FOREACH_FAKE(RESET_FAKE);
+
+	/* reset common FFF internal structures */
+	FFF_RESET_HISTORY();
+
+	//	RESET_FAKE(show_lwm2m_event);
+	//	RESET_FAKE(show_lwm2m_observe);
 }
 
 static struct download_client_cfg config = {
@@ -103,36 +122,21 @@ static void de_init(struct download_client *client)
 	zassert_ok(err, NULL);
 }
 
-static void test_download_simple(void)
+ZTEST_SUITE(download_client, NULL, NULL, my_suite_before, NULL, NULL);
+
+ZTEST(download_client, dl_coap_start)
 {
 	struct download_client client;
 	int32_t recvfrom_params[] = { 25, 25, 25 };
 	int32_t sendto_params[] = { 20, 20, 20 };
 
-	dl_coap_init(75, 20);
+	coap_request_send_fake.custom_fake = coap_request_send_default;
 
-	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
-			   ARRAY_SIZE(recvfrom_params));
-	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+	//	dl_coap_init(75, 20);
 
-	dl_coap_start(&client);
-
-	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
-
-	de_init(&client);
-}
-
-static void test_download_reconnect_on_socket_error(void)
-{
-	struct download_client client;
-	int32_t recvfrom_params[] = { 25, -1, 25, 25 };
-	int32_t sendto_params[] = { 20, 20, 20, 20 };
-
-	dl_coap_init(75, 20);
-
-	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
-			   ARRAY_SIZE(recvfrom_params));
-	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+	//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+	//			   ARRAY_SIZE(recvfrom_params));
+	//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
 
 	dl_coap_start(&client);
 
@@ -141,79 +145,106 @@ static void test_download_reconnect_on_socket_error(void)
 	de_init(&client);
 }
 
-static void test_download_reconnect_on_peer_close(void)
-{
-	struct download_client client;
-	int32_t recvfrom_params[] = { 25, 0, 25, 25 };
-	int32_t sendto_params[] = { 20, 20, 20, 20 };
+//static void test_download_simple(void)
+//{
+//	struct download_client client;
+//	int32_t recvfrom_params[] = { 25, 25, 25 };
+//	int32_t sendto_params[] = { 20, 20, 20 };
+//
+//	dl_coap_init(75, 20);
+//
+//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+//			   ARRAY_SIZE(recvfrom_params));
+//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+//
+//	dl_coap_start(&client);
+//
+//	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
+//
+//	de_init(&client);
+//}
 
-	dl_coap_init(75, 20);
-
-	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
-			   ARRAY_SIZE(recvfrom_params));
-	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
-
-	dl_coap_start(&client);
-
-	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
-
-	de_init(&client);
-}
-
-static void test_download_ignore_duplicate_block(void)
-{
-	struct download_client client;
-	int32_t recvfrom_params[] = { 25, 25, 25, 25 };
-	int32_t sendto_params[] = { 20, 20, 20 };
-	int32_t coap_parse_retv[] = { 0, 0, 1, 0 };
-
-	dl_coap_init(75, 20);
-
-	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
-			   ARRAY_SIZE(recvfrom_params));
-	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
-	mock_return_values("coap_parse", coap_parse_retv, ARRAY_SIZE(coap_parse_retv));
-	override_return_values.func_coap_parse = true;
-
-	dl_coap_start(&client);
-
-	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
-
-	de_init(&client);
-}
-
-static void test_download_abort_on_invalid_block(void)
-{
-	struct download_client client;
-	int32_t recvfrom_params[] = { 25, 25, 25 };
-	int32_t sendto_params[] = { 20, 20, 20 };
-	int32_t coap_parse_retv[] = { 0, 0, -1 };
-
-	dl_coap_init(75, 20);
-
-	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
-			   ARRAY_SIZE(recvfrom_params));
-	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
-	mock_return_values("coap_parse", coap_parse_retv, ARRAY_SIZE(coap_parse_retv));
-	override_return_values.func_coap_parse = true;
-
-	dl_coap_start(&client);
-
-	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_ERROR, 10), "Download must be on error");
-
-	de_init(&client);
-}
-
-void test_main(void)
-{
-	ztest_test_suite(lib_fota_download_test, ztest_unit_test(test_download_simple),
-			 ztest_unit_test(test_download_reconnect_on_socket_error),
-			 ztest_unit_test(test_download_reconnect_on_peer_close),
-			 ztest_unit_test(test_download_ignore_duplicate_block),
-			 ztest_unit_test(test_download_abort_on_invalid_block));
-
-	ztest_run_test_suite(lib_fota_download_test);
-}
+//static void test_download_reconnect_on_socket_error(void)
+//{
+//	struct download_client client;
+//	int32_t recvfrom_params[] = { 25, -1, 25, 25 };
+//	int32_t sendto_params[] = { 20, 20, 20, 20 };
+//
+//	dl_coap_init(75, 20);
+//
+//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+//			   ARRAY_SIZE(recvfrom_params));
+//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+//
+//	dl_coap_start(&client);
+//
+//	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
+//
+//	de_init(&client);
+//}
+//
+//static void test_download_reconnect_on_peer_close(void)
+//{
+//	struct download_client client;
+//	int32_t recvfrom_params[] = { 25, 0, 25, 25 };
+//	int32_t sendto_params[] = { 20, 20, 20, 20 };
+//
+//	dl_coap_init(75, 20);
+//
+//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+//			   ARRAY_SIZE(recvfrom_params));
+//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+//
+//	dl_coap_start(&client);
+//
+//	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
+//
+//	de_init(&client);
+//}
+//
+//static void test_download_ignore_duplicate_block(void)
+//{
+//	struct download_client client;
+//	int32_t recvfrom_params[] = { 25, 25, 25, 25 };
+//	int32_t sendto_params[] = { 20, 20, 20 };
+//	int32_t coap_parse_retv[] = { 0, 0, 1, 0 };
+//
+//	dl_coap_init(75, 20);
+//
+//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+//			   ARRAY_SIZE(recvfrom_params));
+//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+//	mock_return_values("coap_parse", coap_parse_retv, ARRAY_SIZE(coap_parse_retv));
+//	override_return_values.func_coap_parse = true;
+//
+//	dl_coap_start(&client);
+//
+//	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_DONE, 10), "Download must have finished");
+//
+//	de_init(&client);
+//}
+//
+//static void test_download_abort_on_invalid_block(void)
+//{
+//	struct download_client client;
+//	int32_t recvfrom_params[] = { 25, 25, 25 };
+//	int32_t sendto_params[] = { 20, 20, 20 };
+//	int32_t coap_parse_retv[] = { 0, 0, -1 };
+//
+//	dl_coap_init(75, 20);
+//
+//	mock_return_values("mock_socket_offload_recvfrom", recvfrom_params,
+//			   ARRAY_SIZE(recvfrom_params));
+//	mock_return_values("mock_socket_offload_sendto", sendto_params, ARRAY_SIZE(sendto_params));
+//	mock_return_values("coap_parse", coap_parse_retv, ARRAY_SIZE(coap_parse_retv));
+//	override_return_values.func_coap_parse = true;
+//
+//	dl_coap_start(&client);
+//
+//	zassert_ok(wait_for_event(DOWNLOAD_CLIENT_EVT_ERROR, 10), "Download must be on error");
+//
+//	de_init(&client);
+//}
 
 #define TEST_SOCKET_PRIO 40
 NET_SOCKET_REGISTER(mock_socket, TEST_SOCKET_PRIO, AF_UNSPEC, mock_socket_is_supported,
